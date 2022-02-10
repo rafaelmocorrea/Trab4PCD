@@ -2,6 +2,7 @@ import enum
 import cv2
 import numpy as np
 import os
+import sys
 import time
 
 '''
@@ -52,7 +53,7 @@ def sumarizador_frames(path,limiar=20): #retorna o índice e máscaras dos frame
         if ret == False:
             print("Acabou")
             break
-        
+
         conta_frame += 1
         mask = bg.apply(frame)
         _,mask = cv2.threshold(mask,150,255,cv2.THRESH_BINARY)
@@ -94,7 +95,7 @@ def aplica_sumarizacao(path, indices,fps):
         conta_frame += 1
         if conta_frame in indices:
             output.write(frame)
-        
+
     video.release()
     output.release()
     print(f'Arquivo salvo em {filename(path)}')
@@ -115,7 +116,12 @@ def fachada(arq,t,limiar):
     pre_aplicacao = time.time()
     aplica_sumarizacao(arq,frames_dinamizados,fps)
     aplicacao = time.time() - pre_aplicacao
-    print(f'Tempo para sumarizacao: {sumarizacao}\nTempo para dinamizacao: {dinamizacao}\nTempo para aplicacao: {aplicacao}') 
+    print(f'Tempo para sumarizacao: {sumarizacao}\nTempo para dinamizacao: {dinamizacao}\nTempo para aplicacao: {aplicacao}')
 
-path = "" #PATH
-fachada(path,0,50)
+if __name__ == '__main__':
+    args = sys.argv
+    if len(args) != 2:
+        print(f'Uso: {args[0]} <arquivo>')
+    else:
+        path = args[1]
+        fachada(path,0,50)

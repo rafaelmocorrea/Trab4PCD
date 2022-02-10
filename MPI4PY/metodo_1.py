@@ -4,7 +4,6 @@ import numpy as np
 import os
 import time
 import sys
-from multiprocessing import Lock, Pool, Value
 from functools import partial
 
 '''
@@ -58,8 +57,6 @@ def multi_sumarizador(path, limiar, id, n):
     num_frames_conteudo = [a for a in num_frames_conteudo if a > -1]
     frames_conteudo = [b for b in frames_conteudo if len(b)>0]
     return num_frames_conteudo, conta_frame
-
-
 
 def divide_frames(frames, n_procs):
     ret = []
@@ -208,22 +205,22 @@ def fachada(arq,t,limiar):
     except:
         print(f'Arquivo {arq} nao encontrado.')
 
-def fachada_multi(path,t,limiar,n):
-    try:
-        video = cv2.VideoCapture(path)
-        fps = int(video.get(cv2.CAP_PROP_FPS))
-        video.release()
-        pre_sumarizacao = time.time()
-        lista_argumentos = [[path,20,i,n] for i in range(n)]
-        p = Pool(n)
-        result = p.starmap(multi_sumarizador,lista_argumentos)
-        p.close()
-        p.join()
-        frames_filtrados = []
-        limite = 0
-        for i in range(n):
-            frames_filtrados += result[i][0]
-            limite += result[i][1]
+def fachada_multi(path,t,limiar):
+    video = cv2.VideoCapture(path)
+    fps = int(video.get(cv2.CAP_PROP_FPS))
+    video.release()
+    pre_sumarizacao = time.time()
+    frames_filtrados = []
+    from mpi4py import MPI
+    comm = MPI.COMM_WORLD
+    result = multi_sumarizador(path,limiar,comm.Get_rank(),comm.Get_size())
+    if comm.Get_rank() != 0:
+        comm.send(result,dest = 0, tag = 10)
+    else:
+        frames_filtrados += result
+        if (comm.Get_size() > 1):
+            for i in range(1,comm.Get_size()):
+                frames_filtrados += comm.recv(source = i,tag = 10)
         sumarizacao = time.time() - pre_sumarizacao
         pre_dinamizacao = time.time()
         if t != 0:
@@ -234,18 +231,12 @@ def fachada_multi(path,t,limiar,n):
         pre_aplicacao = time.time()
         aplica_sumarizacao(path,frames_dinamizados,fps)
         aplicacao = time.time() - pre_aplicacao
-        print(f'Tempo para sumarizacao: {sumarizacao}\nTempo para dinamizacao: {dinamizacao}\nTempo para aplicacao: {aplicacao}\nNumero de processos: {n}')
-    except:
-        print(f'Arquivo {path} nao encontrado')
+        print(f'Tempo para sumarizacao: {sumarizacao}\nTempo para dinamizacao: {dinamizacao}\nTempo para aplicacao: {aplicacao}\nNumero de processos: {comm.Get_size()}')
 
 if __name__ == "__main__":
     args = sys.argv
-    if len(args) < 2 or len(args) > 3:
-        print(f'Uso: {args[0]} <arquivo> <n_processos>')
+    if len(args) != 2:
+        print(f'Uso: mpiexec -n <n_processos> <--oversubscribe> python3 {args[0]} <arquivo>')
     else:
-        if len(args) == 2:
-            n = os.cpu_count()
-        else:
-            n = int(args[2])
         path = args[1]
-        fachada_multi(path,0,50,n)
+        fachada_multi(path,0,50)
